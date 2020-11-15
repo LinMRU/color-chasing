@@ -1,0 +1,299 @@
+
+
+module  HVCOUNT(
+
+    input                            clk      ,
+    input                            rst_n    ,
+    input    [23:0]                  i_binary ,
+    input                            i_hsync  ,
+    input                            i_vsync  ,
+    input                            i_de     ,
+    
+    output    [23:0]                 o_binary ,
+    output           [31:0]           mid_y    ,
+    output           [31:0]           mid_x    ,
+    output       reg [31:0]          p_sum    ,
+    output                           o_hsync  ,
+    output                           o_vsync  , 
+/*     output       reg [15:0]          x_error  ,
+    output       reg [15:0]          h_error  ,  */
+            
+    output                           o_de              
+
+);
+parameter  WEIGHT=200;
+parameter  HIGN=164;
+
+reg [7:0] hcnt;
+reg [7:0] vcnt;
+reg [15:0]cnt_delete;
+reg [5:0] hcount_begin ;
+reg [3:0] vcount_begin ;
+reg [5:0] hcount_end   ;
+reg [3:0] vcount_end   ;
+
+reg delay_de_1;
+reg delay_hsync_1;
+reg delay_vsync_1;
+wire flag0;
+wire flag1;
+
+
+/* reg delay_hsync_2;
+reg delay_vsync_2;
+reg delay_de_2;
+ */
+
+reg [7:0] x0;
+reg [7:0] y0;
+reg [7:0] x1;
+reg [7:0] y1;
+
+reg [23:0] i_binary_r;
+reg flag_delete;
+
+
+always@(posedge  clk)begin
+    delay_de_1<=i_de;
+    delay_hsync_1<=i_hsync;
+    delay_vsync_1<=i_vsync;
+end
+
+always@(posedge clk or negedge rst_n)begin
+    if(!rst_n) 
+        hcnt<=8'd0;
+    else if (hcnt==WEIGHT-1'b1) 
+        hcnt<=8'd0;
+    else if(i_de==1'b1)
+        hcnt<=hcnt+1'b1;
+    else 
+        hcnt<=8'd0;
+end 
+
+
+
+always@(posedge clk or negedge rst_n)begin
+    if(!rst_n) 
+        vcnt<=8'd0;
+    else if ( hcnt==WEIGHT-1'b1) begin
+        if(vcnt==HIGN-1'b1 )
+            vcnt<=8'd0;
+        else 
+            vcnt<=vcnt+1'b1;
+     end
+end 
+
+/////////////////goal  begin//////////////////////
+always@(posedge clk or negedge rst_n)begin
+    if(!rst_n)
+        hcount_begin<=5'd0;
+    else if (i_de==1'b1)begin
+        if(hcount_begin==5'd17)
+            hcount_begin<=5'd17;
+        else if(i_binary==24'd0)
+            hcount_begin<=hcount_begin+1'b1;
+        else 
+            hcount_begin<=5'd0;
+        end
+    else 
+        hcount_begin<=5'd0;
+end
+
+
+always@(posedge clk or negedge rst_n)begin
+    if(!rst_n)
+        vcount_begin<=4'd0;
+    else if(vcnt!=HIGN-1'b1 )begin
+            if (vcount_begin==4'd5 )
+                vcount_begin<=4'd5;
+            else if (hcnt==WEIGHT-1'b1)begin
+                 if (hcount_begin==5'd17 )
+                    vcount_begin<=vcount_begin+1'b1;
+                else
+                    vcount_begin<=4'd0;
+            end
+    end
+    else 
+         vcount_begin<=4'd0;
+end
+
+/////////////////goal end//////////////////////
+
+
+always@(posedge clk or negedge rst_n)begin
+    if(!rst_n)
+        hcount_end<=4'd0;
+    else if (hcount_begin==5'd17)begin
+        if(hcount_end==4'd10)
+            hcount_end<=4'd10;
+        else if(i_binary==24'hffffff)
+            hcount_end<=hcount_end+1'b1;
+        else 
+            hcount_end<=4'd0;
+        end
+    else 
+        hcount_end<=4'd0;
+end
+
+
+always@(posedge clk or negedge rst_n)begin
+    if(!rst_n)
+        vcount_end<=4'd0;
+    else if (vcount_begin==4'd5  )begin
+        if(vcount_end==4'd5)
+            vcount_end<=4'd5;
+        else if (hcnt==WEIGHT-1'b1)begin
+             if (hcount_begin==5'd0)
+                vcount_end<=vcount_end+1'b1;
+            else 
+                vcount_end<=4'd0;
+        end
+     end
+    else 
+        vcount_end<=4'd0;
+end
+
+///////////////////////////////////////
+
+
+always@(posedge clk or negedge rst_n)begin
+    if(!rst_n)
+        cnt_delete<=16'd0;
+    else if (vcnt==HIGN-1 && hcnt==WEIGHT-1 )
+        cnt_delete<=16'd0;
+    else if(i_binary==24'h000000)
+        cnt_delete<=cnt_delete+1'b1;
+end
+
+
+always@(posedge clk or negedge rst_n )begin
+    if(!rst_n)
+        flag_delete<=1'b0;
+    else if( vcnt==HIGN-1 && hcnt==WEIGHT-1)begin
+        if(cnt_delete<16'd108 )
+            flag_delete<=1'b1;           
+        else 
+            flag_delete<=1'b0; 
+    end
+end
+//////////////////////////////////////////////////
+
+
+always@(posedge clk or negedge rst_n)begin
+    if(!rst_n)begin
+        x0<=8'd0;
+        y0<=8'd0;
+        x1<=8'd0;
+    end 
+    else if (vcount_begin==4'd4  )begin
+        if(hcount_begin==5'd16 )begin
+            x0<=hcnt-16;
+            y0<=vcnt-4;
+        end
+        else if(hcount_end==4'd9 )begin
+            x1<=hcnt-9;
+        end
+    end
+    else if (flag_delete==1'b1)begin
+        x0<=8'd0;
+        y0<=8'd0;
+        x1<=8'd0;
+    end
+end
+
+
+
+always@(posedge clk or negedge rst_n)begin
+    if(!rst_n)begin
+        y1<=8'd0;
+    end 
+    else if(vcount_end==4'd4  ) begin
+        y1<=vcnt-4;
+    end
+    else if(flag_delete==1'b1)
+        y1<=8'd0;
+end
+
+
+
+assign flag0=(x0<hcnt && hcnt<x1)?1'b1:1'b0;
+assign flag1=(y0<vcnt && vcnt<y1)?1'b1:1'b0;
+
+
+
+always@(posedge clk or negedge rst_n)begin
+    if(!rst_n)
+        i_binary_r<=24'd0;
+    
+    else if (flag0==1'b1&&(vcnt==y0 || vcnt==y1))
+            i_binary_r<=24'hff0000;
+    else if (flag1==1'b1&&(hcnt==x0 || hcnt==x1))
+            i_binary_r<=24'hff0000;
+    else if ( vcnt==mid_y && hcnt==mid_x)
+            i_binary_r<=24'hff0000;
+
+    else
+        i_binary_r<=i_binary;
+
+end
+
+
+assign o_binary=i_binary_r;
+assign o_de=delay_de_1;
+assign o_hsync=delay_hsync_1;
+assign o_vsync=delay_vsync_1;
+
+
+reg [31:0]    mid_yr;
+reg [31:0]    mid_xr;
+/**reg [15:0]   p_sum; */
+
+
+
+always@(posedge clk or negedge rst_n)begin
+   if(!rst_n)begin      
+       mid_yr<=32'd0;
+       mid_xr<=32'd0;
+       p_sum <=32'd0;
+   end 
+   else begin
+       mid_yr <= (y1+y0)>>1; 
+       mid_xr<= (x0+x1)>>1; 
+       p_sum <= (x1-x0)*(y1-y0);
+   end 
+   
+ end 
+ 
+ assign mid_y=mid_yr;
+ assign mid_x=mid_xr;
+ 
+
+ 
+ 
+
+
+
+/* always@(posedge clk or negedge rst_n)begin
+   if(!rst_n)begin      
+       x_error<=16'd0;
+   end 
+   else  begin
+       x_error<=mid_x-100;
+   end 
+ 
+ end 
+
+
+always@(posedge clk or negedge rst_n)begin
+   if(!rst_n)begin      
+       h_error<=16'd0;
+   end 
+   else  begin
+       h_error<=p_sum-200;
+   end 
+ 
+ end 
+  
+ */
+
+endmodule
